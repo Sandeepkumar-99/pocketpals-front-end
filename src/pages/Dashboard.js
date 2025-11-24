@@ -1,35 +1,83 @@
-import { AppBar, Toolbar, Typography, IconButton, Menu, MenuItem, Avatar, Box } from "@mui/material";
-import { useContext, useState } from "react";
+import { Box, Typography, Tabs, Tab, Grid } from "@mui/material";
+import { useContext, useState, useEffect } from "react";
 import { AuthContext } from "../context/AuthContext";
+import axios from "axios";
+import Navbar from "../components/Navbar";
+import Loader from "../components/Loader";
+import UserCard from "../components/UserCard";
+import GroupCard from "../components/GroupCard";
 
 const Dashboard = () => {
-  const { user, logout } = useContext(AuthContext);
-  const [anchor, setAnchor] = useState(null);
+  const { user } = useContext(AuthContext);
+  const token = localStorage.getItem("token");
 
-  const openMenu = (e) => setAnchor(e.currentTarget);
-  const closeMenu = () => setAnchor(null);
+  const [tabValue, setTabValue] = useState(0);
+  const [users, setUsers] = useState([]);
+  const [groups, setGroups] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const handleTabChange = (e, newValue) => setTabValue(newValue);
+
+  useEffect(() => {
+    const fetchAdminData = async () => {
+      if (!user.isAdmin) return;
+      try {
+        setLoading(true);
+
+        const usersRes = await axios.get(`http://localhost:5000/api/admin/users?${user.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setUsers(usersRes.data.users);
+
+        const groupsRes = await axios.get(`http://localhost:5000/api/admin/groups?${user.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setGroups(groupsRes.data.groups);
+      } catch (err) {
+        console.error("Admin dashboard fetch error:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAdminData();
+  }, [user, token]);
 
   return (
     <>
-      <AppBar position="static">
-        <Toolbar>
-          <Typography sx={{ flexGrow: 1 }} variant="h6">
-            PocketPals
-          </Typography>
-
-          <IconButton onClick={openMenu}>
-            <Avatar>{user.firstName[0]}</Avatar>
-          </IconButton>
-
-          <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={closeMenu}>
-            <MenuItem onClick={logout}>Logout</MenuItem>
-          </Menu>
-        </Toolbar>
-      </AppBar>
-
+      <Navbar />
       <Box p={3}>
-        <Typography variant="h4">Welcome, {user.firstName} 👋</Typography>
-        <Typography mt={2}>Your dashboard content will go here...</Typography>
+        <Typography variant="h4">
+          Welcome, {user.firstName} {user.lastName} 👋
+        </Typography>
+
+        {user.isAdmin ? (
+          <>
+            <Tabs value={tabValue} onChange={handleTabChange} sx={{ mt: 3, mb: 2 }}>
+              <Tab label="Users" />
+              <Tab label="Groups" />
+            </Tabs>
+
+            {loading ? (
+              <Loader />
+            ) : (
+              <>
+                {tabValue === 0 && (
+                  <Grid container spacing={2}>
+                    {users.map(u => <UserCard key={u._id} user={u} />)}
+                  </Grid>
+                )}
+                {tabValue === 1 && (
+                  <Grid container spacing={2}>
+                    {groups.map(g => <GroupCard key={g._id} group={g} token={token} />)}
+                  </Grid>
+                )}
+              </>
+            )}
+          </>
+        ) : (
+          <Typography mt={3}>You are not an admin. Regular user view goes here.</Typography>
+        )}
       </Box>
     </>
   );
